@@ -38,4 +38,15 @@ export class RedisDatabase implements DatabaseDriver {
     set(key: string, value: any): void {
         this._redis.set(key, JSON.stringify(value));
     }
+
+    /**
+     * Publishes data to channel.
+     *
+     * @param  {string} channel
+     * @param  {any}  value
+     * @return {void}
+     */
+    publish(channel: string, value: any): void {
+        this._redis.publish(channel, JSON.stringify(value));
+    }
 }

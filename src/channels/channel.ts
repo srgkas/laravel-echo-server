@@ -1,6 +1,7 @@
 import { PresenceChannel } from './presence-channel';
 import { PrivateChannel } from './private-channel';
 import { Log } from './../log';
+import {RedisDatabase} from "../database/redis";
 
 export class Channel {
     /**
@@ -67,10 +68,10 @@ export class Channel {
      * @return {void}
      */
     clientEvent(socket, data): void {
-        if (data.event && data.channel) {
-            if (this.isClientEvent(data.event) &&
-                this.isPrivate(data.channel) &&
-                this.isInChannel(socket, data.channel)) {
+        if (this.isEventAcceptable(socket, data)) {
+            if (this.toApplication(data)) {
+                this.sendDataToApplication(data);
+            } else {
                 this.io.sockets.connected[socket.id]
                     .broadcast.to(data.channel)
                     .emit(data.event, data.channel, data.data);
@@ -195,4 +196,28 @@ export class Channel {
     isInChannel(socket: any, channel: string): boolean {
         return !!socket.rooms[channel];
     }
+
+    isEventAcceptable(socket: any, data: any): boolean {
+        if (!data.channel || !data.event) {
+            return false;
+        }
+
+        return this.isClientEvent(data.event) &&
+            this.isPrivate(data.channel) &&
+            this.isInChannel(socket, data.channel);
+    }
+
+    toApplication(data): boolean {
+        return !!data.toApplication && data.appChannel;
+    }
+
+    sendDataToApplication(data): void {
+        if (this.options.database !== 'redis') {
+            return;
+        }
+
+        Log.info(`Sending data to application channel: ${data.appChannel}`);
+
+        new RedisDatabase(this.options).publish(data.appChannel, data.data);
+    };
 }
