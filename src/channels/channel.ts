@@ -10,6 +10,12 @@ export class Channel {
      * @type {array}
      */
     protected _privateChannels: string[] = ['private-*', 'presence-*'];
+    /**
+     * Channels and patters for private channels.
+     *
+     * @type {string}
+     */
+    protected _appChannel: string = 'app-*';
 
     /**
      * Allowed client events
@@ -33,6 +39,11 @@ export class Channel {
     presence: PresenceChannel;
 
     /**
+     * @type {RedisDatabase}
+     */
+    private redisConnection: RedisDatabase;
+
+    /**
      * Create a new channel instance.
      */
     constructor(private io, private options) {
@@ -40,6 +51,10 @@ export class Channel {
         this.presence = new PresenceChannel(io, options);
 
         Log.success('Channels are ready.');
+
+        if (options.database === 'redis') {
+            this.redisConnection = new RedisDatabase(options);
+        }
     }
 
     /**
@@ -197,6 +212,12 @@ export class Channel {
         return !!socket.rooms[channel];
     }
 
+    /**
+     *  Checks if the client event is processable
+     * @param socket
+     * @param data
+     * @returns {boolean}
+     */
     isEventAcceptable(socket: any, data: any): boolean {
         if (!data.channel || !data.event) {
             return false;
@@ -207,17 +228,42 @@ export class Channel {
             this.isInChannel(socket, data.channel);
     }
 
+    /**
+     * Checks if the given data is destined to the server application
+     * @param data
+     * @returns {boolean}
+     */
     toApplication(data): boolean {
         return !!data.toApplication && data.appChannel;
     }
 
+    /**
+     * Checks if the given channel name is correct application channel name
+     * @param {string} channel
+     * @returns {boolean}
+     */
+    isAppChannel(channel: string): boolean {
+        return new RegExp('^' + this._appChannel.replace('*', '.*')).test(channel);
+    }
+
+    /**
+     * Sends the given data to application via redis if it is used in
+     * @param data
+     */
     sendDataToApplication(data): void {
-        if (this.options.database !== 'redis') {
+        if (!this.redisConnection) {
             return;
         }
 
-        Log.info(`Sending data to application channel: ${data.appChannel}`);
+        let channel = data.appChannel;
 
-        new RedisDatabase(this.options).publish(data.appChannel, data.data);
+        if (!this.isAppChannel(data.appChannel)) {
+            channel = this._appChannel.replace('*', '') + channel;
+        }
+
+        data.data.sourceChannel = data.channel;
+        Log.info(`Sending data to application channel: ${channel}`);
+
+        this.redisConnection.publish(channel, data.data);
     };
 }

@@ -176,6 +176,11 @@ export class EchoServer {
      * @return {void}
      */
     broadcast(channel: string, message: any): boolean {
+        if (this.channel.toApplication(channel)) {
+            Log.info('Event is destined to application');
+            return;
+        }
+
         if (message.socket && this.find(message.socket)) {
             return this.toOthers(this.find(message.socket), channel, message);
         } else {
@@ -276,5 +281,15 @@ export class EchoServer {
         socket.on('client event', data => {
             this.channel.clientEvent(socket, data);
         });
+    }
+
+    /**
+     * Checks if the event is directed to the main application.
+     *
+     * @param  {object} channel
+     * @return {boolean}
+     */
+    toApplication(channel: any): boolean {
+        return new RegExp('^app-').test(channel);
     }
 }
